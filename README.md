@@ -61,7 +61,7 @@ Araçlar (hepsi salt okunur): `belge_dogrula(dosya|xml, tur)`, `belge_ozeti(dosy
 ```python
 from efatura_kontrol.kontrol import kontrol_et, ozet
 
-rapor = kontrol_et("fatura.xml")            # ya da bytes, tur="earsiv"
+rapor = kontrol_et("fatura.xml")  # ya da bytes, tur="earsiv"
 rapor.gecerli, rapor.sayim("hata"), rapor.sozluk()
 for b in rapor.bulgular:
     print(b.seviye, b.kod, b.satir, b.mesaj, b.duzeltme)
