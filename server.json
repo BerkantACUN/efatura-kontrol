@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
   "name": "io.github.BerkantACUN/efatura-kontrol",
-  "description": "GİB UBL-TR e-Fatura/e-Arşiv/e-İrsaliye belgelerini GİB'in kendi XSD ve şematron kurallarıyla yerelde denetler; Türkçe açıklama ve düzeltme",
+  "description": "GİB e-Fatura/e-Arşiv/e-İrsaliye belgelerini GİB'in XSD ve şematron kurallarıyla yerelde denetler",
   "repository": {
     "url": "https://github.com/BerkantACUN/efatura-kontrol",
     "source": "github"
