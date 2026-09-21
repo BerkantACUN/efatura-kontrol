@@ -31,6 +31,9 @@ def irsaliye() -> bytes:
 
 
 def degistir(veri: bytes, eski: str, yeni: str, sayi: int = 1) -> bytes:
+    veri = veri.replace(b"
+", b"
+")
     e, y = eski.encode("utf-8"), yeni.encode("utf-8")
     assert e in veri, eski
     return veri.replace(e, y, sayi)
