@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: test (${{ matrix.os }}, py${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: uv sync --all-groups
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pytest --cov=src --cov-report=term --cov-fail-under=80
+      - name: CLI on the examples
+        run: |
+          uv run efatura-kontrol dogrula ornekler/temel_fatura.xml ornekler/tevkifat_fatura.xml ornekler/earsiv_fatura.xml ornekler/irsaliye.xml
+          uv run efatura-kontrol ozet ornekler/tevkifat_fatura.xml
+          uv run efatura-kontrol kod UnitCodeList --ara C62
+
+  guncel:
+    name: ekler/ GİB paketiyle güncel mi
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync --all-groups
+      - run: uv run python araclar/paket_indir.py kaynak
+      - run: uv run pytest tests/test_derle.py -q

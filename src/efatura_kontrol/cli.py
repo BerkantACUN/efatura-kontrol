@@ -1,0 +1,161 @@
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+
+from efatura_kontrol import PAKET, SURUM
+from efatura_kontrol.belge import TURLER
+
+
+def _yaz(veri) -> None:
+    print(json.dumps(veri, ensure_ascii=False, indent=2))
+
+
+def main(argv: list[str] | None = None) -> int:
+    p = argparse.ArgumentParser(
+        prog="efatura-kontrol",
+        description=(
+            "GİB UBL-TR e-belgelerini (e-Fatura, e-Arşiv, e-İrsaliye, zarf) GİB'in kendi XSD ve "
+            f"şematron kurallarıyla kontrol eder (UBL-TR {PAKET['ublTr']}, e-Fatura Paketi "
+            f"{PAKET['eFaturaPaketi']}, şematron {PAKET['sematronGuncelleme']})."
+        ),
+    )
+    p.add_argument("--version", action="version", version=f"efatura-kontrol {SURUM}")
+    alt = p.add_subparsers(dest="komut", required=True)
+
+    d = alt.add_parser("dogrula", help="belgeyi denetle, bulguları yaz")
+    d.add_argument("dosya", nargs="+")
+    d.add_argument("--tur", choices=TURLER, help="belge türünü zorla (varsayılan: kök elemandan)")
+    d.add_argument("--json", action="store_true", help="JSON çıktı")
+    d.add_argument("--sessiz", action="store_true", help="yalnız özet satırı")
+
+    o = alt.add_parser("ozet", help="belgenin kimliği: senaryo, tip, taraflar, satırlar, toplamlar")
+    o.add_argument("dosya")
+
+    k = alt.add_parser(
+        "kod", help="GİB kod listesi: `kod` (liste adları), `kod UnitCodeList --ara KGM`"
+    )
+    k.add_argument("liste", nargs="?")
+    k.add_argument("--ara")
+
+    a = alt.add_parser("acikla", help="bir bulgu kodunun Türkçe açıklaması ve düzeltmesi")
+    a.add_argument("kod")
+
+    t = alt.add_parser("toplu", help="klasör ya da dosya listesini paralel denetle (JSONL)")
+    t.add_argument("yol", nargs="+")
+    t.add_argument("--isci", type=int, help="süreç sayısı (varsayılan: çekirdek sayısı)")
+    t.add_argument("--json", action="store_true", help="satır başına bir JSON rapor")
+
+    alt.add_parser("mcp", help="MCP sunucusunu (stdio) başlat")
+
+    dr = alt.add_parser("derle", help="GİB paketlerinden ekler/ üret (geliştirici)")
+    dr.add_argument("kaynak", nargs="?", default="kaynak")
+    dr.add_argument("hedef", nargs="?")
+
+    args = p.parse_args(argv)
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    return KOMUTLAR[args.komut](args)
+
+
+def _dogrula(args) -> int:
+    from efatura_kontrol.kontrol import hazirla, kontrol_et
+
+    hazirla()
+    hatali = False
+    raporlar = []
+    for dosya in args.dosya:
+        rapor = kontrol_et(dosya, args.tur)
+        hatali = hatali or not rapor.gecerli
+        if args.json:
+            raporlar.append(rapor.sozluk())
+        elif args.sessiz:
+            print(rapor.metin().splitlines()[0])
+        else:
+            print(rapor.metin())
+    if args.json:
+        _yaz(raporlar[0] if len(raporlar) == 1 else raporlar)
+    return 1 if hatali else 0
+
+
+def _ozet(args) -> int:
+    from efatura_kontrol.belge import BelgeHatasi
+    from efatura_kontrol.kontrol import ozet
+
+    try:
+        _yaz(ozet(args.dosya))
+    except BelgeHatasi as e:
+        print(f"{e.kod}: {e.mesaj}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def _kod(args) -> int:
+    from efatura_kontrol import kod
+
+    if not args.liste:
+        _yaz(kod.liste_adlari())
+        return 0
+    try:
+        _yaz(kod.liste(args.liste, args.ara))
+    except KeyError as e:
+        print(e.args[0], file=sys.stderr)
+        return 1
+    return 0
+
+
+def _acikla(args) -> int:
+    from efatura_kontrol import kod
+
+    a = kod.acikla(args.kod)
+    if a is None:
+        print(f"{args.kod} için hazır açıklama yok; GİB mesajı bulguda verilir", file=sys.stderr)
+        return 1
+    _yaz({"kod": args.kod, **a})
+    return 0
+
+
+def _toplu(args) -> int:
+    from efatura_kontrol.toplu import toplu_kontrol
+
+    hatali = sayi = 0
+    for rapor in toplu_kontrol(args.yol, args.isci):
+        sayi += 1
+        hatali += 0 if rapor.gecerli else 1
+        print(
+            json.dumps(rapor.sozluk(), ensure_ascii=False)
+            if args.json
+            else rapor.metin().splitlines()[0]
+        )
+    if not args.json:
+        print(f"{sayi} belge, {hatali} geçersiz")
+    return 1 if hatali else 0
+
+
+def _mcp(args) -> int:
+    from efatura_kontrol.mcp_server import mcp
+
+    mcp.run()
+    return 0
+
+
+def _derle(args) -> int:
+    from efatura_kontrol import derle
+
+    return derle.main([args.kaynak] + ([args.hedef] if args.hedef else []))
+
+
+KOMUTLAR = {
+    "dogrula": _dogrula,
+    "ozet": _ozet,
+    "kod": _kod,
+    "acikla": _acikla,
+    "toplu": _toplu,
+    "mcp": _mcp,
+    "derle": _derle,
+}
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

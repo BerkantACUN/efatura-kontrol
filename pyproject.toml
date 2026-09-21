@@ -1,0 +1,55 @@
+[project]
+name = "efatura-kontrol"
+version = "0.1.0"
+description = "GİB UBL-TR e-belgelerini (e-Fatura, e-Arşiv, e-İrsaliye, zarf) GİB'e göndermeden önce GİB'in kendi XSD ve şematron kurallarıyla kontrol eder, hatayı Türkçe açıklar — CLI ve MCP sunucusu. Validates Turkish UBL-TR e-invoices with the tax authority's own rules."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [{ name = "Berkant Acun" }]
+keywords = ["e-fatura", "e-arşiv", "e-irsaliye", "ubl-tr", "gib", "schematron", "mcp", "türkiye", "invoice"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Financial and Insurance Industry",
+  "License :: OSI Approved :: MIT License",
+  "Natural Language :: Turkish",
+  "Programming Language :: Python :: 3",
+  "Topic :: Office/Business :: Financial :: Accounting",
+]
+dependencies = [
+  "lxml>=5.0",
+  "saxonche>=12.5",
+  "mcp>=1.10",
+]
+
+[project.urls]
+Homepage = "https://github.com/BerkantACUN/efatura-kontrol"
+Issues = "https://github.com/BerkantACUN/efatura-kontrol/issues"
+
+[project.scripts]
+efatura-kontrol = "efatura_kontrol.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/efatura_kontrol"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/efatura_kontrol", "README.md", "LICENSE", "KAYNAKLAR.md", "CHANGELOG.md"]
+
+[dependency-groups]
+dev = ["pytest>=8", "pytest-cov>=5", "ruff>=0.6"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
