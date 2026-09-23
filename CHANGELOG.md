@@ -1,5 +1,11 @@
 # Değişiklikler
 
+## [Unreleased]
+
+### Fixed
+
+- Alt komut verilmeden çalıştırıldığında (stdin bir boruysa) doğrudan MCP sunucusu olarak başlar: bazı MCP barındırıcıları ve dizin derleyicileri paketi `efatura-kontrol` diye çağırıyor. Terminalde davranış değişmedi, yardım basılır.
+
 ## [0.1.0] — 2026-09-21
 
 İlk yayın.

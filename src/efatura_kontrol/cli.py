@@ -12,6 +12,20 @@ def _yaz(veri) -> None:
     print(json.dumps(veri, ensure_ascii=False, indent=2))
 
 
+def _komutlari_coz(argv: list[str] | None) -> list[str]:
+    """Argümansız çağrı: uçta bir MCP istemcisi varsa (stdin boru) sunucuyu başlat.
+    Bazı MCP barındırıcıları ve dizin derleyicileri paketi alt komut vermeden
+    çalıştırıyor; insan terminalinde davranış değişmez, yardım basılır."""
+    verilen = list(sys.argv[1:] if argv is None else argv)
+    if verilen:
+        return verilen
+    try:
+        etkilesimli = sys.stdin.isatty()
+    except (AttributeError, ValueError):
+        etkilesimli = False
+    return verilen if etkilesimli else ["mcp"]
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         prog="efatura-kontrol",
@@ -53,7 +67,7 @@ def main(argv: list[str] | None = None) -> int:
     dr.add_argument("kaynak", nargs="?", default="kaynak")
     dr.add_argument("hedef", nargs="?")
 
-    args = p.parse_args(argv)
+    args = p.parse_args(_komutlari_coz(argv))
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     return KOMUTLAR[args.komut](args)

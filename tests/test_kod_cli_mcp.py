@@ -146,3 +146,39 @@ def test_mcp_sunucu_stdio_baslar():
         timeout=120,
     )
     assert '"serverInfo"' in p.stdout and "efatura-kontrol" in p.stdout
+
+
+def test_argumansiz_calisinca_mcp_sunucusu_baslar(monkeypatch):
+    from efatura_kontrol.cli import _komutlari_coz
+
+    monkeypatch.setattr("sys.stdin", type("S", (), {"isatty": lambda self: False})())
+    assert _komutlari_coz([]) == ["mcp"]
+    assert _komutlari_coz(["ozet", "a.xml"]) == ["ozet", "a.xml"]
+    monkeypatch.setattr("sys.stdin", type("S", (), {"isatty": lambda self: True})())
+    assert _komutlari_coz([]) == []
+    monkeypatch.setattr("sys.stdin", None)
+    assert _komutlari_coz([]) == ["mcp"]
+
+
+def test_argumansiz_stdio_sunucusu_gercekten_konusur():
+    istek = json.dumps(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": {"name": "glama-benzeri", "version": "0"},
+            },
+        }
+    )
+    p = subprocess.run(
+        [sys.executable, "-m", "efatura_kontrol.cli"],
+        input=istek + "\n",
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=120,
+    )
+    assert '"serverInfo"' in p.stdout
