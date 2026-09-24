@@ -2,9 +2,13 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Bağımlılık alt sınırı `mcp>=2.0` (kod MCPServer API'sini kullanıyor; 1.x ile hiç yüklenmiyordu).
+
 ### Added
 
-- `efatura-kontrol mcp --http`: MCP Python SDK'nın streamable HTTP taşımasıyla uzak sunucu (yol `/mcp`, durumsuz). Adres/port `--host`/`--port` ya da `EFATURA_HOST`/`EFATURA_PORT` (varsayılan `0.0.0.0:8080`); `EFATURA_API_KEY` verilirse `X-API-Key` başlığı zorunlu.
+- `efatura-kontrol mcp --http`: MCP Python SDK'nın streamable HTTP taşımasıyla uzak sunucu (yol `/mcp`, durumsuz). Adres/port `--host`/`--port` ya da `EFATURA_HOST`/`EFATURA_PORT` (varsayılan `0.0.0.0:8080`); `EFATURA_API_KEY` verilirse `X-API-Key` başlığı zorunlu; anahtar yoksa açılışta uyarı basılır. Uzak modda `dosya` parametresi kapalı (sunucu diskinden okuma yok), istek gövdesi 64 MB ile sınırlı.
 - Dockerfile (Python 3.12 slim, çok aşamalı, root olmayan kullanıcı) ve `ghcr.io/berkantacun/efatura-kontrol` imajını `v*` etiketlerinde yayınlayan Docker iş akışı.
 
 ### Fixed

@@ -7,10 +7,13 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 import pytest
 
 from efatura_kontrol import cli, mcp_server
+
+KOK = Path(__file__).resolve().parent.parent
 
 BASLAT = {
     "jsonrpc": "2.0",
@@ -30,7 +33,7 @@ def _bos_port() -> int:
         return s.getsockname()[1]
 
 
-def _istek(port: int, anahtar: str | None = None) -> tuple[int, str]:
+def _istek(port: int, anahtar: str | None = None, veri: dict | None = None) -> tuple[int, str]:
     basliklar = {
         "Content-Type": "application/json",
         "Accept": "application/json, text/event-stream",
@@ -39,7 +42,7 @@ def _istek(port: int, anahtar: str | None = None) -> tuple[int, str]:
         basliklar["X-API-Key"] = anahtar
     r = urllib.request.Request(
         f"http://127.0.0.1:{port}/mcp",
-        data=json.dumps(BASLAT).encode(),
+        data=json.dumps(veri or BASLAT).encode(),
         headers=basliklar,
         method="POST",
     )
@@ -118,7 +121,51 @@ def test_anahtar_kapisi_lifespan_gecirir():
     assert cagrilar == ["lifespan", "http"]
 
 
+def test_http_dosya_parametresi_kapali(sunucu):
+    port = sunucu()
+    ornek = next((KOK / "ornekler").glob("*.xml"))
+    cagri = {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {"name": "belge_dogrula", "arguments": {"dosya": str(ornek)}},
+    }
+    durum, govde = _istek(port, veri=cagri)
+    assert durum == 200
+    assert "uzak-dosya-kapali" in govde
+    assert '"gecerli"' not in govde
+
+
+def test_boyut_siniri_413():
+    cagrilar = []
+
+    async def uygulama(scope, receive, send):
+        cagrilar.append(await receive())
+
+    def calistir(basliklar, parcalar):
+        giden = []
+        kuyruk = [{"type": "http.request", "body": p, "more_body": True} for p in parcalar]
+
+        async def receive():
+            return kuyruk.pop(0)
+
+        async def send(mesaj):
+            giden.append(mesaj)
+
+        sinir = mcp_server._BoyutSiniri(uygulama, sinir=10)
+        asyncio.run(sinir({"type": "http", "headers": basliklar}, receive, send))
+        return giden
+
+    giden = calistir([(b"content-length", b"11")], [])
+    assert giden[0]["status"] == 413 and cagrilar == []
+    giden = calistir([], [b"x" * 11])
+    assert giden[0]["status"] == 413
+    giden = calistir([(b"content-length", b"5")], [b"x" * 5])
+    assert giden == [] and len(cagrilar) == 1
+
+
 def test_http_varsayilanlari_ve_ortam(monkeypatch):
+    monkeypatch.setattr(mcp_server, "_UZAK_MOD", False)
     goruldu = {}
 
     def sahte_run(uygulama, **kw):

@@ -19,7 +19,7 @@ classifiers = [
 dependencies = [
   "lxml>=5.0",
   "saxonche>=12.5",
-  "mcp>=1.10",
+  "mcp>=2.0",
 ]
 
 [project.urls]

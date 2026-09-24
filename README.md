@@ -84,7 +84,7 @@ docker run --rm -p 8080:8080 -e EFATURA_API_KEY=gizli ghcr.io/berkantacun/efatur
 }
 ```
 
-Uzak modda `belge_dogrula`/`belge_ozeti` için `dosya` sunucunun dosya sistemini gösterir; belgeyi `xml` parametresiyle gönderin. Anahtar yalnız basit bir paylaşımlı sırdır; sunucuyu internete açarken TLS sonlandıran bir ters vekil (Container Apps ingress gibi) arkasında çalıştırın.
+Uzak modda `dosya` parametresi kapalıdır (sunucu kendi diskini okumaz, `uzak-dosya-kapali` hatası döner); belgeyi `xml` parametresiyle gönderin. İstek gövdesi 64 MB ile sınırlıdır. Anahtar yalnız basit bir paylaşımlı sırdır; sunucuyu internete açarken TLS sonlandıran bir ters vekil (Container Apps ingress gibi) arkasında çalıştırın.
 
 ## Python
 
