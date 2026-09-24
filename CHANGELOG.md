@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Added
+
+- `efatura-kontrol mcp --http`: MCP Python SDK'nın streamable HTTP taşımasıyla uzak sunucu (yol `/mcp`, durumsuz). Adres/port `--host`/`--port` ya da `EFATURA_HOST`/`EFATURA_PORT` (varsayılan `0.0.0.0:8080`); `EFATURA_API_KEY` verilirse `X-API-Key` başlığı zorunlu.
+- Dockerfile (Python 3.12 slim, çok aşamalı, root olmayan kullanıcı) ve `ghcr.io/berkantacun/efatura-kontrol` imajını `v*` etiketlerinde yayınlayan Docker iş akışı.
+
 ### Fixed
 
 - Alt komut verilmeden çalıştırıldığında (stdin bir boruysa) doğrudan MCP sunucusu olarak başlar: bazı MCP barındırıcıları ve dizin derleyicileri paketi `efatura-kontrol` diye çağırıyor. Terminalde davranış değişmedi, yardım basılır.
