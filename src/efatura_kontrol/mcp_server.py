@@ -4,9 +4,10 @@ import hmac
 import json
 import os
 import sys
-from typing import Any
+from typing import Annotated, Any
 
 from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from efatura_kontrol import PAKET, SURUM
 
@@ -15,7 +16,17 @@ try:
 except ImportError:
     from mcp.server.fastmcp import FastMCP as MCPServer
 
-SALT_OKUR = ToolAnnotations(readOnlyHint=True, openWorldHint=False)
+
+def _salt_okur(baslik: str) -> ToolAnnotations:
+    """Bütün araçlar yalnız okur, aynı girdiye aynı sonucu verir, ağa çıkmaz."""
+    return ToolAnnotations(
+        title=baslik,
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    )
+
 
 mcp = MCPServer(
     "efatura-kontrol",
@@ -27,7 +38,10 @@ mcp = MCPServer(
         "'hata' seviyesi GİB'in reddedeceği şeydir; 'uyari' aritmetik/para birimi tutarsızlığıdır "
         "(GİB kabul edebilir, alıcı reddedebilir); 'bilgi' imza durumu gibi notlardır. "
         "Bulguları satır numarası ve düzeltme önerisiyle aktar; imza kriptografik olarak doğrulanmaz, "
-        "'geçerli' demek GİB'e kesin kabul demek değildir."
+        "'geçerli' demek GİB'e kesin kabul demek değildir. Akış: belgeyi `belge_dogrula` ile denetle; "
+        "açıklaması boş bir bulgu kodu için `bulgu_acikla`; kod listesi hatasında geçerli değerleri "
+        "`kod_listesi` ile bul; belgenin içeriği sorulursa `belge_ozeti`. Uzak (HTTP) sunucuda "
+        "`dosya` kapalıdır, belgeyi `xml` ile gönder."
     ),
 )
 
@@ -52,16 +66,75 @@ def _kaynak(dosya: str | None, xml: str | None) -> tuple[Any, str | None]:
     raise ValueError("dosya ya da xml verilmeli")
 
 
-@mcp.tool(annotations=SALT_OKUR)
+Dosya = Annotated[
+    str | None,
+    Field(
+        description=(
+            "Sunucunun diskindeki UBL-TR XML belgesinin yolu (yalnız yerel stdio sunucusunda). "
+            "Uzak (HTTP) sunucuda kapalıdır; orada `xml` kullanın. `xml` verilirse yok sayılır."
+        ),
+        examples=["C:/faturalar/GIB2026000000001.xml", "/home/ali/fatura.xml"],
+    ),
+]
+Xml = Annotated[
+    str | None,
+    Field(
+        description=(
+            "Belgenin tam XML metni (UTF-8; Invoice, DespatchAdvice, ReceiptAdvice, "
+            "ApplicationResponse ya da StandardBusinessDocument kökü). En çok 50 MB."
+        ),
+        examples=[
+            '<?xml version="1.0" encoding="UTF-8"?><Invoice xmlns="urn:oasis:names:specification:'
+            'ubl:schema:xsd:Invoice-2" ...>...</Invoice>'
+        ],
+    ),
+]
+
+
+@mcp.tool(title="UBL-TR belgesini doğrula", annotations=_salt_okur("UBL-TR belgesini doğrula"))
 def belge_dogrula(
-    dosya: str | None = None, xml: str | None = None, tur: str | None = None
+    dosya: Dosya = None,
+    xml: Xml = None,
+    tur: Annotated[
+        str | None,
+        Field(
+            description=(
+                "Belge türünü zorlar: fatura | earsiv | irsaliye | irsaliye-yaniti | "
+                "uygulama-yaniti | zarf. Verilmezse kök elemandan ve cbc:ProfileID'den bulunur "
+                "(EARSIVFATURA → earsiv). Bilinmeyen değer `tur-bilinmiyor` bulgusu döndürür."
+            ),
+            examples=["fatura", "earsiv", "irsaliye", "zarf"],
+        ),
+    ] = None,
 ) -> dict[str, Any]:
-    """UBL-TR belgesini denetler: XML biçimi, OASIS UBL 2.1 XSD, GİB e-Fatura şematronu (498 kural,
-    kod listeleri dahil), satır/vergi/tevkifat/dip toplam aritmetiği, imza yapısı. Her bulgu: kod,
-    seviye (hata/uyari/bilgi), GİB'in özgün mesajı, satır numarası, Türkçe açıklama ve düzeltme.
-    `dosya` yerel yol ya da `xml` belge metni; `tur` fatura|earsiv|irsaliye|irsaliye-yaniti|
-    uygulama-yaniti|zarf (verilmezse kök elemandan ve ProfileID'den bulunur). Validates a Turkish
-    UBL-TR e-invoice with the tax authority's own schematron and returns findings."""
+    """Bir UBL-TR e-belgesini GİB'e göndermeden önce GİB'in yayımladığı kurallarla denetler.
+
+    Ne yapar: sırasıyla XML iyi biçimliliği ve boyutu, OASIS UBL 2.1 XSD'si (UBL-TR paketi) ile
+    GİB zarf şemaları, GİB e-Fatura Paketi şematronu (kod listeleri dahil), satır / vergi /
+    tevkifat / dip toplam aritmetiği ve elektronik imzanın yapısı. Ağa çıkmaz.
+
+    Ne zaman: kullanıcı bir e-Fatura, e-Arşiv fatura, e-İrsaliye, irsaliye yanıtı, uygulama
+    yanıtı ya da zarf XML'inin geçerli olup olmadığını, GİB'in neden reddettiğini ya da neyin
+    düzeltilmesi gerektiğini sorduğunda. Yalnız içerik (taraflar, tutarlar) soruluyorsa
+    `belge_ozeti` daha hızlıdır.
+
+    Girdi: `dosya` (yerel yol) ya da `xml` (belge metni); isteğe bağlı `tur`. Örnekler:
+    `{"dosya": "C:/faturalar/fatura.xml"}`, `{"xml": "<Invoice ...>...</Invoice>"}`,
+    `{"xml": "<Invoice ...>", "tur": "earsiv"}`.
+
+    Dönüş (JSON nesne): `dosya`; `ozet` = {`gecerli` (hata yoksa true), `hata`, `uyari`,
+    `bilgi` sayıları, `tur`, `profil` (senaryo), `tip` (fatura tipi), `sure_ms`}; `paket`
+    (kullanılan GİB paket sürümleri); `bulgular[]`, her biri `kod` (ör.
+    sch-GeneralUnitCodeCheck-1, xsd-…, hesap-…, imza-…), `seviye` (hata = GİB reddeder;
+    uyari = aritmetik/para birimi tutarsızlığı; bilgi = not), `kaynak` (xml/xsd/sematron/hesap/
+    imza), `mesaj`, `gib_mesaj` (şematronun özgün metni), `kural` (XPath testi), `konum`
+    (XPath), `satir`, `aciklama`, `duzeltme`. Uzak sunucuda `dosya` verilirse
+    {`hata`: "uzak-dosya-kapali", `mesaj`} döner.
+
+    English: validates a Turkish UBL-TR e-document offline with the tax authority's own XSD and
+    schematron plus arithmetic and signature-structure checks; returns findings with line
+    numbers, the original GİB message and a Turkish fix.
+    """
     from efatura_kontrol.kontrol import kontrol_et
 
     try:
@@ -71,11 +144,28 @@ def belge_dogrula(
     return kontrol_et(kaynak, tur, ad).sozluk()
 
 
-@mcp.tool(annotations=SALT_OKUR)
-def belge_ozeti(dosya: str | None = None, xml: str | None = None) -> dict[str, Any]:
-    """Belgenin kimliği: senaryo, fatura tipi, numara, UUID, tarih, para birimi, satıcı/alıcı
-    (VKN/TCKN, unvan), satırlar (ilk 50), vergiler, dip toplamlar, imzalı mı. Summary of a UBL-TR
-    document: parties, lines, taxes and totals."""
+@mcp.tool(title="UBL-TR belge özeti", annotations=_salt_okur("UBL-TR belge özeti"))
+def belge_ozeti(dosya: Dosya = None, xml: Xml = None) -> dict[str, Any]:
+    """Bir UBL-TR belgesinin içeriğini yapılandırılmış olarak çıkarır; kural denetimi yapmaz.
+
+    Ne zaman: "bu fatura kime kesilmiş?", "toplam ne kadar?", "hangi senaryo/tip?", "kaç satır
+    var?", "imzalı mı?" gibi sorularda ya da doğrulama öncesi doğru belgeye bakıldığını teyit
+    etmek için. Geçerlilik soruluyorsa `belge_dogrula` kullanın.
+
+    Girdi: `dosya` (yerel yol) ya da `xml` (belge metni). Örnekler:
+    `{"dosya": "C:/faturalar/fatura.xml"}`, `{"xml": "<Invoice ...>...</Invoice>"}`.
+
+    Dönüş (JSON nesne): `dosya`, `tur`, `kokEleman`, `ublSurumu`, `ozellestirme` (TR1.2),
+    `senaryo` (cbc:ProfileID), `tip` (cbc:InvoiceTypeCode), `no`, `uuid`, `tarih`, `saat`,
+    `paraBirimi`; `satici` ve `alici` = {`unvan`, `vkn`, `tckn`, `vergiDairesi`, `sehir`};
+    `satirSayisi`, `satirlar[]` (ilk 50; `no`, `ad`, `miktar`, `birim`, `birimFiyat`, `tutar`,
+    `kdvYuzde`); `vergiler[]` (`kod`, `ad`, `matrah`, `yuzde`, `tutar`); `dipToplam`
+    (LegalMonetaryTotal alanları); `imzali`; `notlar`. Okunamayan belgede {`hata`, `mesaj`,
+    `satir`}; uzak sunucuda `dosya` verilirse {`hata`: "uzak-dosya-kapali"}.
+
+    English: structured summary of a UBL-TR document — scenario, type, parties (tax IDs),
+    lines, taxes, totals and whether it is signed. No rule checks.
+    """
     from efatura_kontrol.belge import BelgeHatasi
     from efatura_kontrol.kontrol import ozet
 
@@ -89,10 +179,39 @@ def belge_ozeti(dosya: str | None = None, xml: str | None = None) -> dict[str, A
         return {"hata": e.kod, "mesaj": e.mesaj, "satir": e.satir}
 
 
-@mcp.tool(annotations=SALT_OKUR)
-def bulgu_acikla(kod: str) -> dict[str, Any]:
-    """Bir bulgu kodunun (örn. sch-GeneralUnitCodeCheck-1, hesap-dip-odenecek) Türkçe açıklaması,
-    hangi alanın neden reddedildiği ve nasıl düzeltileceği. Explains a finding code."""
+@mcp.tool(title="Bulgu kodunu açıkla", annotations=_salt_okur("Bulgu kodunu açıkla"))
+def bulgu_acikla(
+    kod: Annotated[
+        str,
+        Field(
+            description=(
+                "`belge_dogrula` bulgusundaki `kod` alanı: şematron (sch-<Kural>-<sıra>), XSD "
+                "(xsd-…), aritmetik (hesap-…), imza (imza-…) ya da XML (xml-…) kodu."
+            ),
+            examples=[
+                "sch-GeneralUnitCodeCheck-1",
+                "hesap-dip-odenecek",
+                "xsd-cvc-complex-type-2-4-a",
+            ],
+        ),
+    ],
+) -> dict[str, Any]:
+    """Bir bulgu kodunun Türkçe açıklamasını ve düzeltme önerisini verir; belge gerektirmez.
+
+    Ne zaman: kullanıcı bir hatanın ne anlama geldiğini ya da nasıl düzeltileceğini sorduğunda,
+    ya da `belge_dogrula` bulgusunda `aciklama`/`duzeltme` boş geldiğinde. Kod listesinden bir
+    değer gerekiyorsa ardından `kod_listesi` kullanın.
+
+    Girdi örnekleri: `{"kod": "sch-GeneralUnitCodeCheck-1"}`, `{"kod": "hesap-dip-odenecek"}`,
+    `{"kod": "xsd-cvc-complex-type-2-4-a"}` (bütün xsd- kodları ortak açıklamaya düşer).
+
+    Dönüş (JSON nesne): {`kod`, `baslik`, `aciklama` (hangi alan neden reddedildi), `duzeltme`}.
+    Hazır açıklaması olmayan kodda {`kod`, `aciklama`: null, `not`}: o durumda bulgudaki
+    `gib_mesaj` GİB'in kendi açıklamasıdır.
+
+    English: Turkish explanation and suggested fix for a finding code returned by the
+    validator.
+    """
     from efatura_kontrol import kod as kodlar
 
     a = kodlar.acikla(kod)
@@ -105,12 +224,48 @@ def bulgu_acikla(kod: str) -> dict[str, Any]:
     return {"kod": kod, **a}
 
 
-@mcp.tool(annotations=SALT_OKUR)
-def kod_listesi(liste: str, ara: str | None = None) -> dict[str, Any]:
-    """GİB kod listesinin değerleri (şematronun fiilen uyguladığı liste): UnitCodeList, TaxType,
-    InvoiceTypeCodeList, ProfileIDType, CurrencyCodeList, WithholdingTaxTypeWithPercent,
-    TaxExemptionReasonCodeType, PaymentMeansCodeTypeList... `ara` ile alt dize filtresi. Values of a
-    GİB code list as enforced by the schematron."""
+@mcp.tool(title="GİB kod listesi değerleri", annotations=_salt_okur("GİB kod listesi değerleri"))
+def kod_listesi(
+    liste: Annotated[
+        str,
+        Field(
+            description=(
+                "Kod listesinin adı (büyük/küçük harf duyarsız; tek eşleşen alt dize de olur). "
+                "Tam liste için `kod_listeleri`."
+            ),
+            examples=[
+                "UnitCodeList",
+                "TaxType",
+                "WithholdingTaxTypeWithPercent",
+                "CurrencyCodeList",
+            ],
+        ),
+    ],
+    ara: Annotated[
+        str | None,
+        Field(
+            description="Değerlerde aranacak alt dize; verilmezse bütün değerler döner.",
+            examples=["KGM", "0015", "627", "TRY"],
+        ),
+    ] = None,
+) -> dict[str, Any]:
+    """GİB şematronunun fiilen uyguladığı bir kod listesinin geçerli değerlerini verir; belge
+    gerektirmez.
+
+    Ne zaman: "adet için hangi unitCode?", "KDV'nin vergi kodu ne?", "627 tevkifat kodu geçerli
+    mi?", "fatura tipleri neler?" gibi sorularda ya da `belge_dogrula` bir kod listesi hatası
+    (ör. sch-GeneralUnitCodeCheck-1) verdiğinde doğru değeri bulmak için.
+
+    Girdi örnekleri: `{"liste": "UnitCodeList", "ara": "KGM"}`, `{"liste": "TaxType"}`,
+    `{"liste": "WithholdingTaxTypeWithPercent", "ara": "627"}`.
+
+    Dönüş (JSON nesne): {`liste` (tam adı), `aciklama` (listenin Türkçe açıklaması ve hangi
+    alana uygulandığı), `sayi` (eşleşen değer sayısı), `degerler[]`}. Liste bulunamazsa ya da
+    ad birden çok listeye uyarsa {`hata`: "Liste bulunamadı: …; adaylar: …"}.
+
+    English: valid values of a GİB code list as enforced by the schematron, optionally
+    filtered.
+    """
     from efatura_kontrol import kod
 
     try:
@@ -119,10 +274,22 @@ def kod_listesi(liste: str, ara: str | None = None) -> dict[str, Any]:
         return {"hata": e.args[0]}
 
 
-@mcp.tool(annotations=SALT_OKUR)
+@mcp.tool(title="GİB kod listeleri ve paket sürümü", annotations=_salt_okur("GİB kod listeleri"))
 def kod_listeleri() -> dict[str, Any]:
-    """Mevcut GİB kod listelerinin adları ve Türkçe açıklamaları; kaynak paket sürümleri. Names of the
-    available code lists and the GİB package versions this build uses."""
+    """Mevcut GİB kod listelerinin adlarını, Türkçe açıklamalarını ve bu sürümün dayandığı GİB
+    paket sürümlerini verir; parametre almaz.
+
+    Ne zaman: hangi kod listelerinin bulunduğunu keşfetmek için (`kod_listesi` öncesi), ya da
+    "hangi şematron sürümüyle denetliyorsun?", "UBL-TR kaçıncı sürüm?" sorularında.
+
+    Girdi örneği: `{}`.
+
+    Dönüş (JSON nesne): `paket` = {`ublTr`, `eFaturaPaketi`, `sematronGuncelleme`,
+    `kodListeleriKilavuzu`, `indirme`, `kaynak`}; `listeler` = {liste adı: Türkçe açıklama}.
+
+    English: names and Turkish descriptions of the available code lists, and the GİB package
+    versions this build validates against.
+    """
     from efatura_kontrol import kod
 
     return {"paket": PAKET, "listeler": kod.liste_adlari()}
