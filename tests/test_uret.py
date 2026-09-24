@@ -91,6 +91,13 @@ def test_rastgele_girdilerde_aritmetik_tutarli():
         ({"satirlar": [{"ad": "x", "miktar": "1", "birim": "ADET", "birim_fiyat": "1"}]}, "C62"),
         ({"satirlar": [{"ad": "x", "miktar": "1", "birim_fiyat": "1", "kdv_orani": "0"}]}, "0"),
         ({"satirlar": []}, "satirlar"),
+        (
+            {
+                "satirlar": [{"ad": "x", "miktar": "1", "birim_fiyat": "1", "kdv_orani": "20"}]
+                * 1001
+            },
+            "1000",
+        ),
         ({"senaryo": "IHRACAT"}, "senaryo"),
     ],
 )
