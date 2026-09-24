@@ -4,6 +4,7 @@
 
 ### Changed
 
+- README: ayrıntılı İngilizce bölüm (kurulum, komutlar, sonucu okuma, yerel MCP, uzak sunucu/Docker, Python API, sınırlar).
 - Bağımlılık alt sınırı `mcp>=2.0` (kod MCPServer API'sini kullanıyor; 1.x ile hiç yüklenmiyordu).
 - MCP araç tanımları yeniden yazıldı: ne yaptığı, ne zaman kullanılacağı, girdi örnekleri ve dönüş biçimi; her parametrenin şemada açıklaması ve örnekleri; her araçta başlık ve eksiksiz ToolAnnotations (`readOnlyHint`, `destructiveHint: false`, `idempotentHint`, `openWorldHint: false`).
 

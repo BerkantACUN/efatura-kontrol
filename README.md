@@ -2,7 +2,7 @@
 
 GİB'e göndermeden önce e-Fatura, e-Arşiv Fatura, e-İrsaliye ve zarf dosyalarını **GİB'in kendi kurallarıyla** kontrol eder: OASIS UBL 2.1 XSD'si, GİB'in e-Fatura Paketi şematronu (498 kural, 41 kod listesi), satır/vergi/tevkifat/dip toplam aritmetiği ve imza yapısı. Her bulgu satır numarası, GİB'in özgün mesajı, Türkçe açıklama ve düzeltme önerisiyle gelir. Komut satırı, Python kütüphanesi ve MCP sunucusu; hiçbir veri ağa gitmez.
 
-*Validates Turkish UBL-TR e-invoices (e-Fatura, e-Arşiv, e-İrsaliye, envelopes) offline with the Revenue Administration's own XSD and schematron rules, plus arithmetic and signature-structure checks; explains every finding in Turkish with a fix. CLI, Python API and MCP server.*
+*Validates Turkish UBL-TR e-invoices (e-Fatura, e-Arşiv, e-İrsaliye, envelopes) offline with the Revenue Administration's own XSD and schematron rules, plus arithmetic and signature-structure checks; explains every finding in Turkish with a fix. CLI, Python API and MCP server (local stdio or remote HTTP). [English documentation ↓](#english)*
 
 mcp-name: io.github.BerkantACUN/efatura-kontrol
 
@@ -171,6 +171,98 @@ Yani araç GİB'in kendi paketindeki eskimiş örnekleri bile yakalıyor; `ornek
 - GİB'in **canlı** kontrolleri (mükellef kayıtlı mı, etiket geçerli mi, faaliyet kodu–KDV oranı eşleşmesi, mükerrer numara) bu araçta yoktur; bunlar ancak GİB sisteminde bilinir.
 - e-Arşiv **raporu** (`eArsivRaporu`) ve e-Defter kapsam dışıdır (sonraki sürüm).
 - "Geçerli" = GİB'in yayımladığı XSD ve şematronu geçer; GİB'in sistem tarafındaki ek kontrolleri için garanti değildir.
+
+## English
+
+**efatura-kontrol** checks Turkish e-documents in the UBL-TR format (e-Fatura, e-Arşiv invoice, e-İrsaliye despatch advice, receipt/application responses and envelopes) **before** they are sent to the Revenue Administration (GİB). It runs GİB's own rules offline: the OASIS UBL 2.1 XSD shipped in the UBL-TR package, GİB's e-Fatura schematron (flattened and compiled to XSLT 3.0, run with Saxon), line / tax / withholding / total arithmetic and the structure of the XAdES signature. Nothing is sent over the network.
+
+### Install
+
+```bash
+uvx efatura-kontrol --help      # no install, needs uv (https://docs.astral.sh/uv/)
+pip install efatura-kontrol     # or install permanently
+```
+
+Python ≥ 3.10. Dependencies are lxml and SaxonC-HE (`saxonche`, a ~40 MB wheel for Windows, macOS and Linux). The first run compiles the schematron in about half a second; after that a document takes milliseconds.
+
+### Command line
+
+```bash
+efatura-kontrol dogrula invoice.xml            # validate; exit code 1 if there is an error
+efatura-kontrol dogrula *.xml --json           # machine-readable report
+efatura-kontrol ozet invoice.xml               # parties, lines, taxes, totals
+efatura-kontrol kod UnitCodeList --ara KGM     # values of a GİB code list
+efatura-kontrol acikla sch-GeneralUnitCodeCheck-1
+efatura-kontrol toplu folder/ --json           # validate a folder in parallel (JSON lines)
+```
+
+Command names are Turkish: *dogrula* = validate, *ozet* = summary, *kod* = code list, *acikla* = explain, *toplu* = batch. The document type is detected from the root element and `cbc:ProfileID`; force it with `--tur fatura|earsiv|irsaliye|irsaliye-yaniti|uygulama-yaniti|zarf`.
+
+### Reading the result
+
+Each finding has a `kod` (stable identifier, e.g. `sch-GeneralUnitCodeCheck-1` for schematron rules, `xsd-…`, `hesap-…` for arithmetic, `imza-…` for signature), a `seviye` (severity) and a line number. Severity `hata` (error) means GİB will reject the document; `uyari` (warning) is an arithmetic or currency inconsistency GİB may accept but the buyer may reject; `bilgi` (info) is a note such as "not signed yet". `gib_mesaj` is GİB's original (Turkish) message; `aciklama` and `duzeltme` are a Turkish explanation and a suggested fix. The JSON keys are Turkish as well: `gecerli` = valid, `bulgular` = findings, `satir` = line.
+
+### MCP server (local)
+
+For Claude Desktop, Claude Code, Cursor and other MCP clients:
+
+```json
+{
+  "mcpServers": {
+    "efatura-kontrol": { "command": "uvx", "args": ["efatura-kontrol", "mcp"] }
+  }
+}
+```
+
+Tools (all read-only): `belge_dogrula` (validate a document by path `dosya` or content `xml`), `belge_ozeti` (summary), `bulgu_acikla` (explain a finding code), `kod_listesi` (values of a code list), `kod_listeleri` (available code lists and GİB package versions). Listed in the official MCP registry as `io.github.BerkantACUN/efatura-kontrol`.
+
+### Remote server (Docker / HTTP)
+
+`efatura-kontrol mcp --http` serves the same tools over MCP streamable HTTP at `http://<host>:8080/mcp`. It is stateless, so several replicas can run behind a load balancer. An image is published to GitHub Container Registry for every `v*` release:
+
+```bash
+docker run --rm -p 8080:8080 -e EFATURA_API_KEY=change-me ghcr.io/berkantacun/efatura-kontrol
+```
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `EFATURA_HOST` | `0.0.0.0` | Listen address (IPv4, because Azure Container Apps has no IPv6) |
+| `EFATURA_PORT` | `8080` | Port |
+| `EFATURA_API_KEY` | — | If set, every request must carry `X-API-Key: <value>`, otherwise 401. Without it the server logs a warning and is open to anyone |
+
+`--host` and `--port` override the variables. Client configuration:
+
+```json
+{
+  "mcpServers": {
+    "efatura-kontrol": {
+      "type": "http",
+      "url": "https://your-server.example.com/mcp",
+      "headers": { "X-API-Key": "change-me" }
+    }
+  }
+}
+```
+
+In remote mode the `dosya` (file path) parameter is **disabled** for security (the server never reads its own disk; the tool returns `uzak-dosya-kapali`), so send the document content in the `xml` parameter. Request bodies are limited to 64 MB. The image runs Python 3.12 slim as a non-root user. The API key is a simple shared secret: put the server behind a TLS-terminating reverse proxy (such as the Container Apps ingress) before exposing it to the internet.
+
+### Python API
+
+```python
+from efatura_kontrol.kontrol import kontrol_et, ozet
+
+report = kontrol_et("invoice.xml")   # or bytes; tur="earsiv" forces the type
+report.gecerli, report.sayim("hata"), report.sozluk()
+for f in report.bulgular:
+    print(f.seviye, f.kod, f.satir, f.mesaj, f.duzeltme)
+```
+
+### Limits
+
+- The signature is checked for structure only, not cryptographically (certificate, digest, timestamp).
+- GİB's **live** checks (is the taxpayer registered, is the mailbox alias valid, duplicate numbers…) cannot be done offline and are not included.
+- The e-Arşiv report (`eArsivRaporu`) and e-Defter (e-ledger) are out of scope.
+- "Valid" means the document passes the XSD and schematron GİB publishes; it is not a guarantee against additional server-side checks.
 
 ## Kaynaklar
 
