@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "efatura-kontrol": {
+      "command": "uvx",
+      "args": ["efatura-kontrol", "mcp"]
+    }
+  }
+}
