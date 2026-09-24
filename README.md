@@ -251,7 +251,7 @@ In remote mode the `dosya` (file path) parameter is **disabled** for security (t
 ```python
 from efatura_kontrol.kontrol import kontrol_et, ozet
 
-report = kontrol_et("invoice.xml")   # or bytes; tur="earsiv" forces the type
+report = kontrol_et("invoice.xml")  # or bytes; tur="earsiv" forces the type
 report.gecerli, report.sayim("hata"), report.sozluk()
 for f in report.bulgular:
     print(f.seviye, f.kod, f.satir, f.mesaj, f.duzeltme)
