@@ -182,3 +182,21 @@ def test_argumansiz_stdio_sunucusu_gercekten_konusur():
         timeout=120,
     )
     assert '"serverInfo"' in p.stdout
+
+
+def test_mcp_arac_tanimlari_eksiksiz():
+    araclar = asyncio.run(mcp_server.mcp.list_tools())
+    for a in araclar:
+        d = a.description
+        for bolum in ("Ne zaman:", "Dönüş (JSON nesne)", "English:"):
+            assert bolum in d, (a.name, bolum)
+        assert "örne" in d.lower(), a.name
+        assert a.title, a.name
+        n = a.annotations.model_dump(by_alias=True)
+        assert n["title"] and n["readOnlyHint"] is True and n["destructiveHint"] is False, a.name
+        assert n["idempotentHint"] is True and n["openWorldHint"] is False, a.name
+        sema = a.inputSchema if hasattr(a, "inputSchema") else a.input_schema
+        for ad, ozellik in sema.get("properties", {}).items():
+            assert ozellik.get("description") and ozellik.get("examples"), (a.name, ad)
+    dogrula = next(a for a in araclar if a.name == "belge_dogrula")
+    assert "uzak-dosya-kapali" in dogrula.description
