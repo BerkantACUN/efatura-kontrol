@@ -128,12 +128,28 @@ def _vergiler(kok) -> list[dict[str, str | None]]:
     return sonuc
 
 
+# (satır elemanı, miktar elemanı): fatura, irsaliye, irsaliye yanıtı
+SATIR_TURLERI = (
+    ("InvoiceLine", "InvoicedQuantity"),
+    ("DespatchLine", "DeliveredQuantity"),
+    ("ReceiptLine", "ReceivedQuantity"),
+)
+
+
+def _satir_turu(kok) -> tuple[str, str]:
+    for satir, miktar in SATIR_TURLERI:
+        if kok.find(CAC + satir) is not None:
+            return satir, miktar
+    return SATIR_TURLERI[0]
+
+
 def _satirlar(kok, sinir: int) -> list[dict[str, str | None]]:
+    etiket, miktar_etiketi = _satir_turu(kok)
     sonuc = []
-    for s in kok.iterfind(CAC + "InvoiceLine"):
+    for s in kok.iterfind(CAC + etiket):
         if len(sonuc) >= sinir:
             break
-        miktar = s.find(CBC + "InvoicedQuantity")
+        miktar = s.find(CBC + miktar_etiketi)
         sonuc.append(
             {
                 "no": (s.findtext(CBC + "ID") or "").strip(),
@@ -161,9 +177,7 @@ def ozet(kaynak: str | Path | bytes, satir_siniri: int = 50) -> dict[str, Any]:
     def metin(ad: str) -> str | None:
         return (kok.findtext(CBC + ad) or "").strip() or None
 
-    satir_sayisi = sum(1 for _ in kok.iterfind(CAC + "InvoiceLine")) or sum(
-        1 for _ in kok.iterfind(CAC + "DespatchLine")
-    )
+    satir_sayisi = sum(1 for _ in kok.iterfind(CAC + _satir_turu(kok)[0]))
     return {
         "dosya": b.ad,
         "tur": b.tur,
