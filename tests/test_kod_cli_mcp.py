@@ -102,6 +102,7 @@ def test_mcp_araclari(ornekler):
         "bulgu_acikla",
         "kod_listesi",
         "kod_listeleri",
+        "ornek_fatura",
     }
     assert all(
         a.description and a.annotations.model_dump(by_alias=True)["readOnlyHint"] for a in araclar

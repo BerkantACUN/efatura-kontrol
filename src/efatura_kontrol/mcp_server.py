@@ -10,6 +10,7 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from efatura_kontrol import PAKET, SURUM
+from efatura_kontrol.uret import Satir, Senaryo, Taraf
 
 try:
     from mcp.server.mcpserver import MCPServer
@@ -293,6 +294,123 @@ def kod_listeleri() -> dict[str, Any]:
     from efatura_kontrol import kod
 
     return {"paket": PAKET, "listeler": kod.liste_adlari()}
+
+
+ORNEK_SATICI = {
+    "vkn_tckn": "1288331521",
+    "unvan": "AAA Anonim Şirketi",
+    "vergi_dairesi": "Büyük Mükellefler",
+    "ilce": "Beşiktaş",
+    "sehir": "İstanbul",
+}
+ORNEK_ALICI = {
+    "vkn_tckn": "11111111110",
+    "ad": "Ali",
+    "soyad": "Yılmaz",
+    "ilce": "Çankaya",
+    "sehir": "Ankara",
+}
+ORNEK_SATIR = {
+    "ad": "Danışmanlık hizmeti",
+    "miktar": "3",
+    "birim": "HUR",
+    "birim_fiyat": "500",
+    "kdv_orani": "20",
+}
+
+
+@mcp.tool(title="Örnek UBL-TR fatura üret", annotations=_salt_okur("Örnek UBL-TR fatura üret"))
+def ornek_fatura(
+    satici: Annotated[
+        Taraf,
+        Field(
+            description="Satıcı (faturayı düzenleyen): VKN'de unvan, TCKN'de ad/soyad zorunlu.",
+            examples=[ORNEK_SATICI],
+        ),
+    ],
+    alici: Annotated[
+        Taraf,
+        Field(description="Alıcı: VKN'de unvan, TCKN'de ad/soyad zorunlu.", examples=[ORNEK_ALICI]),
+    ],
+    satirlar: Annotated[
+        list[Satir],
+        Field(
+            min_length=1,
+            description="En az bir satır: ad, miktar, birim (UnitCodeList), KDV hariç birim fiyat, "
+            "KDV yüzdesi (> 0).",
+            examples=[[ORNEK_SATIR]],
+        ),
+    ],
+    senaryo: Annotated[
+        Senaryo,
+        Field(
+            description="cbc:ProfileID. EARSIVFATURA e-Arşiv kurallarıyla denetlenir.",
+            examples=["TEMELFATURA", "TICARIFATURA", "EARSIVFATURA"],
+        ),
+    ] = "TEMELFATURA",
+    no: Annotated[
+        str | None,
+        Field(
+            description="Fatura numarası: 3 karakter seri + 4 hane yıl + 9 hane sıra. Verilmezse "
+            "EFK<yıl>000000001.",
+            examples=["ABC2026000000123"],
+        ),
+    ] = None,
+    tarih: Annotated[
+        str | None,
+        Field(
+            description="Düzenleme tarihi (YYYY-AA-GG); verilmezse bugün.", examples=["2026-09-24"]
+        ),
+    ] = None,
+) -> dict[str, Any]:
+    """Basit girdilerden (taraflar, satırlar, KDV oranı) GİB UBL-TR 1.2 biçiminde örnek bir SATIS
+    faturası üretir ve aynı araçla doğrular; hiçbir yere göndermez, dosya yazmaz.
+
+    Ne zaman: kullanıcı test/eğitim için geçerli bir örnek e-Fatura ya da e-Arşiv XML'i
+    istediğinde, kendi ürettiği belgeyi karşılaştıracak bir referans aradığında ya da "şu
+    satırlarla fatura XML'i nasıl olur?" diye sorduğunda. Var olan bir belgeyi denetlemek için
+    `belge_dogrula` kullanın.
+
+    Kapsam: yalnız TRY, KDV oranı > 0; indirim, tevkifat, istisna, döviz yok. Satır tutarı =
+    miktar × birim fiyat, KDV = satır tutarı × oran (kuruşa yarım yukarı); dip toplamlar ve
+    oran başına KDV alt toplamları hesaplanır. Belge imzasızdır: `ext:ExtensionContent` içinde
+    imzanın yerini tutan bir eleman vardır; GİB'e gönderilecek belgeyi entegratör/mali mühür
+    imzalar.
+
+    Girdi örneği: `{"satici": {"vkn_tckn": "1288331521", "unvan": "AAA A.Ş.", "ilce":
+    "Beşiktaş", "sehir": "İstanbul"}, "alici": {"vkn_tckn": "11111111110", "ad": "Ali",
+    "soyad": "Yılmaz", "ilce": "Çankaya", "sehir": "Ankara"}, "satirlar": [{"ad": "Kitap",
+    "miktar": "2", "birim_fiyat": "45.50", "kdv_orani": "10"}], "senaryo": "EARSIVFATURA"}`.
+
+    Dönüş (JSON nesne): `xml` (UTF-8 belge metni), `ozet` (`belge_dogrula` özetiyle aynı:
+    `gecerli`, `hata`, `uyari`, `bilgi`, `tur`, `profil`, `tip`, `sure_ms`) ve `bulgular[]`
+    (yalnız `kod`, `seviye`, `mesaj`; beklenen tek bulgu `imza-yok` bilgisidir). Geçersiz girdi
+    (ör. 9 haneli VKN, listede olmayan birim) şema doğrulama hatası olarak döner.
+
+    English: builds a valid, unsigned UBL-TR 1.2 sample invoice (TRY, VAT > 0) from simple
+    inputs and validates it with this server's own rules.
+    """
+    import datetime as dt
+
+    from efatura_kontrol.kontrol import kontrol_et
+    from efatura_kontrol.uret import FaturaGirdisi
+    from efatura_kontrol.uret import ornek_fatura as uret
+
+    girdi = FaturaGirdisi(
+        satici=satici,
+        alici=alici,
+        satirlar=satirlar,
+        senaryo=senaryo,
+        no=no,
+        tarih=dt.date.fromisoformat(tarih) if tarih else None,
+    )
+    xml = uret(girdi)
+    rapor = kontrol_et(xml.encode("utf-8"), None, "<ornek>")
+    return {
+        "xml": xml,
+        "ozet": rapor.sozluk()["ozet"],
+        "bulgular": [{"kod": b.kod, "seviye": b.seviye, "mesaj": b.mesaj} for b in rapor.bulgular],
+    }
 
 
 VARSAYILAN_HOST = "0.0.0.0"  # Azure Container Apps'te IPv6 yok; "::" dinlemek başlamayı bozar

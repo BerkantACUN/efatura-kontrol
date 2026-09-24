@@ -2,7 +2,7 @@
 
 Bu dosya, bir yapay zekâ ajanının (Cline vb.) efatura-kontrol MCP sunucusunu kullanıcıya soru sormadan kurabilmesi için yazıldı. *This file lets an AI agent such as Cline install the efatura-kontrol MCP server on its own; the steps are in Turkish, commands and JSON are copy-paste ready.*
 
-efatura-kontrol, GİB UBL-TR e-belgelerini (e-Fatura, e-Arşiv fatura, e-İrsaliye, uygulama yanıtı, zarf) GİB'in kendi XSD ve şematron kurallarıyla yerelde denetler. Beş salt-okur araç sunar. API anahtarı, hesap ya da ortam değişkeni **gerekmez**; belgeler ağa gönderilmez.
+efatura-kontrol, GİB UBL-TR e-belgelerini (e-Fatura, e-Arşiv fatura, e-İrsaliye, uygulama yanıtı, zarf) GİB'in kendi XSD ve şematron kurallarıyla yerelde denetler. Altı salt-okur araç sunar (beşi denetim/bilgi, biri örnek fatura üretir; hiçbiri dosya yazmaz). API anahtarı, hesap ya da ortam değişkeni **gerekmez**; belgeler ağa gönderilmez.
 
 ## 1. Ön koşul: uv
 
@@ -39,7 +39,8 @@ Cline'ın `cline_mcp_settings.json` dosyasındaki `mcpServers` nesnesine ekleyin
         "belge_ozeti",
         "bulgu_acikla",
         "kod_listesi",
-        "kod_listeleri"
+        "kod_listeleri",
+        "ornek_fatura"
       ]
     }
   }
@@ -70,7 +71,7 @@ Uzak sunucuda `dosya` parametresi güvenlik gereği kapalıdır (sunucu kendi di
 
 ## 4. Doğrulama
 
-Sunucu listede etkin görünmeli ve beş araç sunmalı. Belge gerektirmeyen araçlarla deneyin:
+Sunucu listede etkin görünmeli ve altı araç sunmalı. Belge gerektirmeyen araçlarla deneyin:
 
 - `kod_listeleri` → `{}` : yanıttaki `paket.ublTr` alanı dolu olmalı (ör. `"1.2.1"`).
 - `kod_listesi` → `{"liste": "UnitCodeList", "ara": "C62"}` : `degerler` = `["C62"]`.
