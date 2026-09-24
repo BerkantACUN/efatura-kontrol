@@ -206,3 +206,32 @@ def test_ozet(ornekler, tevkifat_fatura):
     assert t["tip"] == "TEVKIFAT" and t["alici"]["unvan"].startswith("British")
     i = ozet(ornekler / "irsaliye.xml")
     assert i["tur"] == "irsaliye" and i["satirSayisi"] >= 1
+
+
+def test_ozet_irsaliye_ve_yanit_satirlari(irsaliye):
+    o = ozet(irsaliye)
+    assert o["satirSayisi"] == 4 == len(o["satirlar"])
+    assert o["satirlar"][0] == {
+        "no": "1",
+        "ad": "Masa Üstü Bilgisayar",
+        "miktar": "20",
+        "birim": "C62",
+        "birimFiyat": None,
+        "tutar": None,
+        "kdvYuzde": None,
+    }
+    yanit = (
+        b'<ReceiptAdvice xmlns="urn:oasis:names:specification:ubl:schema:xsd:ReceiptAdvice-2"'
+        b' xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"'
+        b' xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">'
+        b"<cbc:ID>ABC2026000000001</cbc:ID><cac:ReceiptLine><cbc:ID>1</cbc:ID>"
+        b'<cbc:ReceivedQuantity unitCode="KGM">3</cbc:ReceivedQuantity>'
+        b"<cac:Item><cbc:Name>Un</cbc:Name></cac:Item></cac:ReceiptLine></ReceiptAdvice>"
+    )
+    o = ozet(yanit)
+    assert o["satirSayisi"] == 1
+    assert (o["satirlar"][0]["ad"], o["satirlar"][0]["miktar"], o["satirlar"][0]["birim"]) == (
+        "Un",
+        "3",
+        "KGM",
+    )

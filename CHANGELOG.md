@@ -19,6 +19,7 @@
 ### Fixed
 
 - CLI çıktısı bir boruya verilip okuyan taraf erken kapandığında (`| head`) `BrokenPipeError` traceback'i basılmıyor; komut 141 koduyla çıkıyor.
+- `ozet` / `belge_ozeti`: e-İrsaliye ve irsaliye yanıtında `satirSayisi` doluyken `satirlar` boş dönüyordu (yalnız `InvoiceLine` okunuyordu); artık `DespatchLine`/`DeliveredQuantity` ve `ReceiptLine`/`ReceivedQuantity` de okunuyor.
 - Alt komut verilmeden çalıştırıldığında (stdin bir boruysa) doğrudan MCP sunucusu olarak başlar: bazı MCP barındırıcıları ve dizin derleyicileri paketi `efatura-kontrol` diye çağırıyor. Terminalde davranış değişmedi, yardım basılır.
 
 ## [0.1.0] — 2026-09-21
