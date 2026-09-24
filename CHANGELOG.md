@@ -9,6 +9,7 @@
 
 ### Added
 
+- 118 şematron kuralına Türkçe açıklama ve düzeltme önerisi: e-Fatura, e-İrsaliye ve irsaliye yanıtı kurallarının tamamı açıklamalı; toplam kapsam %14,8 → %54,5 (297 kuraldan 162). `araclar/sematron_kapsam.py` kapsamı ve mutasyon taramasıyla tetiklenme sıklığını raporlar.
 - `efatura-kontrol mcp --http`: MCP Python SDK'nın streamable HTTP taşımasıyla uzak sunucu (yol `/mcp`, durumsuz). Adres/port `--host`/`--port` ya da `EFATURA_HOST`/`EFATURA_PORT` (varsayılan `0.0.0.0:8080`); `EFATURA_API_KEY` verilirse `X-API-Key` başlığı zorunlu; anahtar yoksa açılışta uyarı basılır. Uzak modda `dosya` parametresi kapalı (sunucu diskinden okuma yok), istek gövdesi 64 MB ile sınırlı.
 - `ornek-fatura` komutu ve `ornek_fatura` MCP aracı: taraflar, satırlar ve KDV oranından geçerli, imzasız UBL-TR 1.2 SATIS faturası (TEMELFATURA / TICARIFATURA / EARSIVFATURA, TRY); üretilen belge kendi doğrulamasından hatasız geçer.
 - `llms-install.md`: Cline gibi ajanların sunucuyu kendi başına kurması için adım adım rehber (uv, yapılandırma, doğrulama, sorun giderme).
