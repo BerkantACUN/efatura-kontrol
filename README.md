@@ -56,6 +56,8 @@ Claude Desktop / Claude Code / Cursor için:
 
 Araçlar (hepsi salt okunur): `belge_dogrula(dosya|xml, tur)`, `belge_ozeti(dosya|xml)`, `bulgu_acikla(kod)`, `kod_listesi(liste, ara)`, `kod_listeleri()`. Resmî MCP kayıt defterinde `io.github.BerkantACUN/efatura-kontrol`.
 
+Cline gibi ajanlar kurulumu [llms-install.md](llms-install.md) ile kendi başına yapabilir.
+
 ## Uzak sunucu (Docker)
 
 `efatura-kontrol mcp --http` sunucuyu streamable HTTP ile `http://<host>:8080/mcp` adresinde açar (durumsuz; birden çok kopya yük dengeleyici arkasında çalışır). Hazır imaj her `v*` sürümünde yayımlanır:
