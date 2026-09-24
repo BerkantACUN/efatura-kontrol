@@ -27,11 +27,17 @@ NSMAP = {None: NS_INV, "cac": NS_CAC, "cbc": NS_CBC, "ext": NS_EXT}
 KURUS = Decimal("0.01")
 
 
+AZAMI_SATIR = 1000
+
+
 class Taraf(BaseModel):
     """Satıcı ya da alıcı."""
 
     vkn_tckn: str = Field(
-        description="10 haneli VKN (tüzel kişi) ya da 11 haneli TCKN (gerçek kişi).",
+        description=(
+            "10 haneli VKN (tüzel kişi) ya da 11 haneli TCKN (gerçek kişi). Yalnız uzunluk "
+            "denetlenir; örnek değerler yer tutucudur, gerçek bir mükellefe ait değildir."
+        ),
         examples=["1288331521", "11111111110"],
     )
     unvan: str | None = Field(
@@ -113,7 +119,7 @@ Senaryo = Literal["TEMELFATURA", "TICARIFATURA", "EARSIVFATURA"]
 class FaturaGirdisi(BaseModel):
     satici: Taraf
     alici: Taraf
-    satirlar: list[Satir] = Field(min_length=1)
+    satirlar: list[Satir] = Field(min_length=1, max_length=AZAMI_SATIR)
     senaryo: Senaryo = "TEMELFATURA"
     no: str | None = None
     tarih: dt.date | None = None

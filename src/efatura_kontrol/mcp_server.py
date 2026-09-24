@@ -10,7 +10,7 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from efatura_kontrol import PAKET, SURUM
-from efatura_kontrol.uret import Satir, Senaryo, Taraf
+from efatura_kontrol.uret import AZAMI_SATIR, Satir, Senaryo, Taraf
 
 try:
     from mcp.server.mcpserver import MCPServer
@@ -336,8 +336,9 @@ def ornek_fatura(
         list[Satir],
         Field(
             min_length=1,
-            description="En az bir satır: ad, miktar, birim (UnitCodeList), KDV hariç birim fiyat, "
-            "KDV yüzdesi (> 0).",
+            max_length=AZAMI_SATIR,
+            description="En az bir, en çok 1000 satır: ad, miktar, birim (UnitCodeList), KDV "
+            "hariç birim fiyat, KDV yüzdesi (> 0).",
             examples=[[ORNEK_SATIR]],
         ),
     ],
@@ -385,7 +386,8 @@ def ornek_fatura(
     Dönüş (JSON nesne): `xml` (UTF-8 belge metni), `ozet` (`belge_dogrula` özetiyle aynı:
     `gecerli`, `hata`, `uyari`, `bilgi`, `tur`, `profil`, `tip`, `sure_ms`) ve `bulgular[]`
     (yalnız `kod`, `seviye`, `mesaj`; beklenen tek bulgu `imza-yok` bilgisidir). Geçersiz girdi
-    (ör. 9 haneli VKN, listede olmayan birim) şema doğrulama hatası olarak döner.
+    (ör. 9 haneli VKN, listede olmayan birim) şema doğrulama hatası olarak döner. VKN/TCKN'nin
+    yalnız uzunluğu denetlenir; örnekteki numaralar yer tutucudur, gerçek mükelleflere ait değildir.
 
     English: builds a valid, unsigned UBL-TR 1.2 sample invoice (TRY, VAT > 0) from simple
     inputs and validates it with this server's own rules.
