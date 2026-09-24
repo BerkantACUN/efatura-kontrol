@@ -38,6 +38,7 @@ Python ≥ 3.10; bağımlılıklar lxml ve SaxonC-HE (`saxonche`, ~40 MB wheel; 
 | `kod` / `kod UnitCodeList --ara KGM` | GİB kod listeleri (şematronun fiilen uyguladığı değerler) |
 | `acikla sch-GeneralUnitCodeCheck-1` | Bulgu kodunun açıklaması ve düzeltmesi |
 | `toplu klasor/ [--isci 8] [--json]` | Klasördeki tüm XML'leri paralel denetle; 200 belge (22 MB) ≈ 2 s |
+| `ornek-fatura [girdi.json\|-] [-o fatura.xml] [--senaryo TEMELFATURA\|TICARIFATURA\|EARSIVFATURA]` | Taraflar, satırlar ve KDV oranından geçerli, imzasız UBL-TR örnek fatura üretir (girdi yoksa yerleşik örnek); çıktı kendi doğrulamasından geçer |
 | `mcp [--http] [--host H] [--port P]` | MCP sunucusu (stdio; `--http` ile streamable HTTP) |
 
 Belge türü kök elemandan ve `cbc:ProfileID`'den bulunur; `EARSIVFATURA` görünce e-Arşiv kuralları (`type=earchive`) uygulanır. `--tur` ile zorlanabilir.
@@ -54,7 +55,7 @@ Claude Desktop / Claude Code / Cursor için:
 }
 ```
 
-Araçlar (hepsi salt okunur): `belge_dogrula(dosya|xml, tur)`, `belge_ozeti(dosya|xml)`, `bulgu_acikla(kod)`, `kod_listesi(liste, ara)`, `kod_listeleri()`. Resmî MCP kayıt defterinde `io.github.BerkantACUN/efatura-kontrol`.
+Araçlar (hepsi salt okunur, hiçbiri dosya yazmaz): `belge_dogrula(dosya|xml, tur)`, `belge_ozeti(dosya|xml)`, `bulgu_acikla(kod)`, `kod_listesi(liste, ara)`, `kod_listeleri()`, `ornek_fatura(satici, alici, satirlar, senaryo, no, tarih)`. Resmî MCP kayıt defterinde `io.github.BerkantACUN/efatura-kontrol`.
 
 Cline gibi ajanlar kurulumu [llms-install.md](llms-install.md) ile kendi başına yapabilir.
 
@@ -87,6 +88,26 @@ docker run --rm -p 8080:8080 -e EFATURA_API_KEY=gizli ghcr.io/berkantacun/efatur
 ```
 
 Uzak modda `dosya` parametresi kapalıdır (sunucu kendi diskini okumaz, `uzak-dosya-kapali` hatası döner); belgeyi `xml` parametresiyle gönderin. İstek gövdesi 64 MB ile sınırlıdır. Anahtar yalnız basit bir paylaşımlı sırdır; sunucuyu internete açarken TLS sonlandıran bir ters vekil (Container Apps ingress gibi) arkasında çalıştırın.
+
+## Örnek fatura üretme
+
+```bash
+efatura-kontrol ornek-fatura girdi.json -o fatura.xml
+```
+
+```json
+{
+  "satici": {"vkn_tckn": "1288331521", "unvan": "AAA Anonim Şirketi", "vergi_dairesi": "Büyük Mükellefler", "ilce": "Beşiktaş", "sehir": "İstanbul"},
+  "alici": {"vkn_tckn": "11111111110", "ad": "Ali", "soyad": "Yılmaz", "ilce": "Çankaya", "sehir": "Ankara"},
+  "satirlar": [
+    {"ad": "Danışmanlık", "miktar": "3", "birim": "HUR", "birim_fiyat": "500", "kdv_orani": "20"},
+    {"ad": "Kitap", "miktar": "2", "birim_fiyat": "45.50", "kdv_orani": "10"}
+  ],
+  "senaryo": "TEMELFATURA"
+}
+```
+
+Satır tutarı, oran başına KDV alt toplamları ve dip toplamlar hesaplanır; belge XSD, şematron ve aritmetik denetimden hatasız geçer (tek bulgu `imza-yok` bilgisi). Kapsam bilinçli olarak dar: SATIS tipi, TRY, KDV oranı > 0; indirim, tevkifat, istisna ve döviz yok. Belge imzasızdır; test ve öğrenme içindir, GİB'e gönderilecek belgeyi entegratör ya da mali mühür imzalar.
 
 ## Python
 

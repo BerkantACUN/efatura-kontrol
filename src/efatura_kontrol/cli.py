@@ -61,6 +61,20 @@ def main(argv: list[str] | None = None) -> int:
     t.add_argument("--isci", type=int, help="süreç sayısı (varsayılan: çekirdek sayısı)")
     t.add_argument("--json", action="store_true", help="satır başına bir JSON rapor")
 
+    of = alt.add_parser(
+        "ornek-fatura",
+        help="taraflar/satırlar JSON'undan geçerli, imzasız UBL-TR örnek fatura üret",
+    )
+    of.add_argument(
+        "girdi",
+        nargs="?",
+        help="JSON girdi dosyası ya da - (stdin); verilmezse yerleşik örnek kullanılır",
+    )
+    of.add_argument("-o", "--cikti", help="XML'i bu dosyaya yaz (varsayılan: stdout)")
+    of.add_argument(
+        "--senaryo", choices=("TEMELFATURA", "TICARIFATURA", "EARSIVFATURA"), help="senaryoyu zorla"
+    )
+
     m = alt.add_parser("mcp", help="MCP sunucusunu başlat (varsayılan stdio; --http ile uzak)")
     m.add_argument(
         "--http",
@@ -164,6 +178,41 @@ def _mcp(args) -> int:
     return 0
 
 
+def _ornek_fatura(args) -> int:
+    from pydantic import ValidationError
+
+    from efatura_kontrol.kontrol import kontrol_et
+    from efatura_kontrol.mcp_server import ORNEK_ALICI, ORNEK_SATICI, ORNEK_SATIR
+    from efatura_kontrol.uret import ornek_fatura
+
+    if args.girdi is None:
+        veri = {"satici": ORNEK_SATICI, "alici": ORNEK_ALICI, "satirlar": [ORNEK_SATIR]}
+    else:
+        try:
+            metin = (
+                sys.stdin.read() if args.girdi == "-" else open(args.girdi, encoding="utf-8").read()  # noqa: SIM115
+            )
+            veri = json.loads(metin)
+        except (OSError, json.JSONDecodeError) as e:
+            print(f"girdi okunamadı: {e}", file=sys.stderr)
+            return 2
+    if args.senaryo:
+        veri["senaryo"] = args.senaryo
+    try:
+        xml = ornek_fatura(veri)
+    except ValidationError as e:
+        print(f"girdi geçersiz:\n{e}", file=sys.stderr)
+        return 2
+    rapor = kontrol_et(xml.encode("utf-8"), None, args.cikti or "<ornek>")
+    if args.cikti:
+        with open(args.cikti, "w", encoding="utf-8", newline="\n") as f:
+            f.write(xml)
+    else:
+        sys.stdout.write(xml)
+    print(rapor.metin().splitlines()[0], file=sys.stderr)
+    return 0 if rapor.gecerli else 1
+
+
 def _derle(args) -> int:
     from efatura_kontrol import derle
 
@@ -176,6 +225,7 @@ KOMUTLAR = {
     "kod": _kod,
     "acikla": _acikla,
     "toplu": _toplu,
+    "ornek-fatura": _ornek_fatura,
     "mcp": _mcp,
     "derle": _derle,
 }
