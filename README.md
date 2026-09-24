@@ -38,7 +38,7 @@ Python ≥ 3.10; bağımlılıklar lxml ve SaxonC-HE (`saxonche`, ~40 MB wheel; 
 | `kod` / `kod UnitCodeList --ara KGM` | GİB kod listeleri (şematronun fiilen uyguladığı değerler) |
 | `acikla sch-GeneralUnitCodeCheck-1` | Bulgu kodunun açıklaması ve düzeltmesi |
 | `toplu klasor/ [--isci 8] [--json]` | Klasördeki tüm XML'leri paralel denetle; 200 belge (22 MB) ≈ 2 s |
-| `mcp` | MCP sunucusu (stdio) |
+| `mcp [--http] [--host H] [--port P]` | MCP sunucusu (stdio; `--http` ile streamable HTTP) |
 
 Belge türü kök elemandan ve `cbc:ProfileID`'den bulunur; `EARSIVFATURA` görünce e-Arşiv kuralları (`type=earchive`) uygulanır. `--tur` ile zorlanabilir.
 
@@ -55,6 +55,36 @@ Claude Desktop / Claude Code / Cursor için:
 ```
 
 Araçlar (hepsi salt okunur): `belge_dogrula(dosya|xml, tur)`, `belge_ozeti(dosya|xml)`, `bulgu_acikla(kod)`, `kod_listesi(liste, ara)`, `kod_listeleri()`. Resmî MCP kayıt defterinde `io.github.BerkantACUN/efatura-kontrol`.
+
+## Uzak sunucu (Docker)
+
+`efatura-kontrol mcp --http` sunucuyu streamable HTTP ile `http://<host>:8080/mcp` adresinde açar (durumsuz; birden çok kopya yük dengeleyici arkasında çalışır). Hazır imaj her `v*` sürümünde yayımlanır:
+
+```bash
+docker run --rm -p 8080:8080 -e EFATURA_API_KEY=gizli ghcr.io/berkantacun/efatura-kontrol
+```
+
+| Ortam değişkeni | Varsayılan | Anlamı |
+|---|---|---|
+| `EFATURA_HOST` | `0.0.0.0` | Dinlenecek adres (Azure Container Apps IPv6 desteklemediği için IPv4) |
+| `EFATURA_PORT` | `8080` | Port |
+| `EFATURA_API_KEY` | — | Verilirse her istekte `X-API-Key` başlığı bu değere eşit olmalı, yoksa 401 |
+
+İstemci tarafı:
+
+```json
+{
+  "mcpServers": {
+    "efatura-kontrol": {
+      "type": "http",
+      "url": "https://sunucu.example.com/mcp",
+      "headers": { "X-API-Key": "gizli" }
+    }
+  }
+}
+```
+
+Uzak modda `belge_dogrula`/`belge_ozeti` için `dosya` sunucunun dosya sistemini gösterir; belgeyi `xml` parametresiyle gönderin. Anahtar yalnız basit bir paylaşımlı sırdır; sunucuyu internete açarken TLS sonlandıran bir ters vekil (Container Apps ingress gibi) arkasında çalıştırın.
 
 ## Python
 

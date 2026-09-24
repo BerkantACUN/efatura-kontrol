@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import hmac
+import json
+import os
 from typing import Any
 
 from mcp.types import ToolAnnotations
@@ -104,6 +107,56 @@ def kod_listeleri() -> dict[str, Any]:
     from efatura_kontrol import kod
 
     return {"paket": PAKET, "listeler": kod.liste_adlari()}
+
+
+VARSAYILAN_HOST = "0.0.0.0"  # Azure Container Apps'te IPv6 yok; "::" dinlemek başlamayı bozar
+VARSAYILAN_PORT = 8080
+
+
+class _AnahtarKapisi:
+    """EFATURA_API_KEY verildiğinde her HTTP isteğinde X-API-Key başlığını zorunlu kılar."""
+
+    def __init__(self, uygulama, anahtar: str) -> None:
+        self.uygulama = uygulama
+        self.anahtar = anahtar.encode("utf-8")
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] == "http":
+            verilen = dict(scope.get("headers") or []).get(b"x-api-key", b"")
+            if not hmac.compare_digest(verilen, self.anahtar):
+                govde = json.dumps(
+                    {"hata": "yetkisiz", "mesaj": "Geçerli bir X-API-Key başlığı gerekli"},
+                    ensure_ascii=False,
+                ).encode("utf-8")
+                await send(
+                    {
+                        "type": "http.response.start",
+                        "status": 401,
+                        "headers": [
+                            (b"content-type", b"application/json; charset=utf-8"),
+                            (b"content-length", str(len(govde)).encode()),
+                        ],
+                    }
+                )
+                await send({"type": "http.response.body", "body": govde})
+                return
+        await self.uygulama(scope, receive, send)
+
+
+def http_uygulamasi(api_anahtari: str | None = None, host: str = VARSAYILAN_HOST):
+    """Streamable HTTP ASGI uygulaması (yol: /mcp). Durumsuz: her istek bağımsız, böylece
+    birden çok kopya yük dengeleyici arkasında oturum yapışkanlığı olmadan çalışır."""
+    uygulama = mcp.streamable_http_app(stateless_http=True, host=host)
+    return _AnahtarKapisi(uygulama, api_anahtari) if api_anahtari else uygulama
+
+
+def http_calistir(host: str | None = None, port: int | None = None) -> None:
+    import uvicorn
+
+    host = host or os.environ.get("EFATURA_HOST") or VARSAYILAN_HOST
+    port = port or int(os.environ.get("EFATURA_PORT") or VARSAYILAN_PORT)
+    uygulama = http_uygulamasi(os.environ.get("EFATURA_API_KEY") or None, host)
+    uvicorn.run(uygulama, host=host, port=port, proxy_headers=True, forwarded_allow_ips="*")
 
 
 if __name__ == "__main__":

@@ -61,7 +61,14 @@ def main(argv: list[str] | None = None) -> int:
     t.add_argument("--isci", type=int, help="süreç sayısı (varsayılan: çekirdek sayısı)")
     t.add_argument("--json", action="store_true", help="satır başına bir JSON rapor")
 
-    alt.add_parser("mcp", help="MCP sunucusunu (stdio) başlat")
+    m = alt.add_parser("mcp", help="MCP sunucusunu başlat (varsayılan stdio; --http ile uzak)")
+    m.add_argument(
+        "--http",
+        action="store_true",
+        help="streamable HTTP (yol /mcp); EFATURA_API_KEY varsa X-API-Key zorunlu",
+    )
+    m.add_argument("--host", help="dinlenecek adres (EFATURA_HOST, varsayılan 0.0.0.0)")
+    m.add_argument("--port", type=int, help="port (EFATURA_PORT, varsayılan 8080)")
 
     dr = alt.add_parser("derle", help="GİB paketlerinden ekler/ üret (geliştirici)")
     dr.add_argument("kaynak", nargs="?", default="kaynak")
@@ -148,9 +155,12 @@ def _toplu(args) -> int:
 
 
 def _mcp(args) -> int:
-    from efatura_kontrol.mcp_server import mcp
+    from efatura_kontrol import mcp_server
 
-    mcp.run()
+    if getattr(args, "http", False):
+        mcp_server.http_calistir(args.host, args.port)
+    else:
+        mcp_server.mcp.run()
     return 0
 
 
