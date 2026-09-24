@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
+import os
 import sys
 
 from efatura_kontrol import PAKET, SURUM
@@ -91,7 +93,13 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(_komutlari_coz(argv))
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
-    return KOMUTLAR[args.komut](args)
+    try:
+        return KOMUTLAR[args.komut](args)
+    except BrokenPipeError:
+        # Çıktıyı okuyan taraf kapandı (`| head` gibi): traceback basma, kalan yazımları yut
+        with contextlib.suppress(OSError, ValueError):
+            os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        return 141
 
 
 def _dogrula(args) -> int:
